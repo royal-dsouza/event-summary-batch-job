@@ -46,7 +46,7 @@ steps:
     args:
       - 'run'
       - 'jobs'
-      - 'create'
+      - 'update'
       - 'event-processor-job'
       - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME'
       - '--region=us-central1'
