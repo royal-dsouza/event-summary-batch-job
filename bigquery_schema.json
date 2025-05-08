@@ -1,0 +1,26 @@
+[
+    {
+      "name": "hour",
+      "type": "TIMESTAMP",
+      "mode": "REQUIRED",
+      "description": "Start of the hour for which events are aggregated."
+    },
+    {
+      "name": "click_event_count",
+      "type": "INTEGER",
+      "mode": "NULLABLE",
+      "description": "Number of 'click' events recorded in the hour."
+    },
+    {
+      "name": "view_event_count",
+      "type": "INTEGER",
+      "mode": "NULLABLE",
+      "description": "Number of 'view' events recorded in the hour."
+    },
+    {
+      "name": "purchase_event_count",
+      "type": "INTEGER",
+      "mode": "NULLABLE",
+      "description": "Number of 'purchase' events recorded in the hour."
+    }
+  ]
