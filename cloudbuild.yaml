@@ -7,7 +7,6 @@ substitutions:
   _BIGQUERY_TABLE: event_hourly_summary
   _BIGQUERY_STG_TABLE: event_hourly_summary_staging
   _REPO_NAME: event-processor-repo
-  _IMAGE: us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -29,7 +28,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - $_IMAGE
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME'
       - '.'
 
   # Step 3: Push the Docker image to Artifact Registry
@@ -37,7 +36,7 @@ steps:
     id: 'Push'
     args:
       - 'push'
-      - $_IMAGE
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME'
 
   # Deploy Cloud Run job
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -48,7 +47,7 @@ steps:
       - 'jobs'
       - 'create'
       - 'event-processor-job'
-      - '--image=$_IMAGE'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME'
       - '--region=us-central1'
       - '--cpu=1'
       - '--memory=2Gi'
@@ -58,4 +57,7 @@ steps:
 
 # Use Container Registry to store the image
 images:
-  - $_IMAGE
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/event-processor:$TAG_NAME'
+
+# Timeout for the entire build process
+timeout: '1800s'  # 30 minutes
