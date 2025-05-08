@@ -59,6 +59,3 @@ steps:
 # Use Container Registry to store the image
 images:
   - $_IMAGE
-
-# Only trigger this build on tags that match v*
-tags: ['v*']
