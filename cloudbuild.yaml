@@ -6,6 +6,7 @@ substitutions:
   _BIGQUERY_DATASET: platform_event_data
   _BIGQUERY_TABLE: event_hourly_summary
   _BIGQUERY_STG_TABLE: event_hourly_summary_staging
+  _HOURS_THRESHOLD: "24"
   _REPO_NAME: event-processor-repo
 
 options:
@@ -52,8 +53,8 @@ steps:
       - '--cpu=1'
       - '--memory=2Gi'
       - '--max-retries=3'
-      - '--timeout=3600s'
-      - '--set-env-vars=SOURCE_BUCKET=$_SOURCE_BUCKET,SUMMARY_BUCKET=$_SUMMARY_BUCKET,BIGQUERY_DATASET=$_BIGQUERY_DATASET,BIGQUERY_TABLE=$_BIGQUERY_TABLE,BIGQUERY_STG_TABLE=$_BIGQUERY_STG_TABLE'
+      - '--task-timeout=3600s'
+      - '--set-env-vars=SOURCE_BUCKET=$_SOURCE_BUCKET,SUMMARY_BUCKET=$_SUMMARY_BUCKET,BIGQUERY_DATASET=$_BIGQUERY_DATASET,BIGQUERY_TABLE=$_BIGQUERY_TABLE,BIGQUERY_STG_TABLE=$_BIGQUERY_STG_TABLE,HOURS_THRESHOLD=$_HOURS_THRESHOLD'
 
 # Use Container Registry to store the image
 images:
