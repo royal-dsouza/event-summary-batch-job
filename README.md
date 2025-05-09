@@ -59,7 +59,7 @@ hour,click_event_count,view_event_count,purchase_event_count
 
 The Cloud Build CI/CD pipeline automatically handles the entire development lifecycle
 
-The Cloud Build pipline gets triggered on the GitHub repository Git tag (e.g., v1.0.0)
+The Cloud Build pipeline gets triggered on every Git tag (e.g., v1.0.0) to the Github Repository
 
 1. Runs unit tests
 2. Builds the Docker container
@@ -68,7 +68,7 @@ The Cloud Build pipline gets triggered on the GitHub repository Git tag (e.g., v
 
 ```mermaid
 graph TD
-    A[Git Push] --> B[Cloud Build Trigger]
+    A[Git Tag like V1.0.0] --> B[Cloud Build Trigger]
     B --> C[Run Tests]
     C --> D[Build Container]
     D --> E[Push to Registry]
