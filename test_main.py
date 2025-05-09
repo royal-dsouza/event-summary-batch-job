@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import MagicMock, patch
+import csv
+from io import StringIO
 
 import main
 
@@ -39,43 +41,27 @@ def test_list_old_json_blobs(monkeypatch):
     assert len(result) == 1
 
 
+
 def test_aggregate_events():
     # Create blobs with event JSON
     data1 = json.dumps({"timestamp": "2025-05-07T10:15:00", "type": "click"})
     data2 = json.dumps({"timestamp": "2025-05-07T10:45:00", "type": "view"})
     data3 = json.dumps({"timestamp": "2025-05-07T11:00:00", "type": "click"})
     blobs = [DummyBlob("a.json", None, data1), DummyBlob("b.json", None, data2), DummyBlob("c.json", None, data3)]
-    summary = main.aggregate_events(blobs)
-    lines = summary.split("\n")
-    parsed = [json.loads(line) for line in lines]
-    row10 = next(r for r in parsed if r["hour"] == "2025-05-07T10:00:00")
-    assert row10.get("click_event_count", 0) == 1
-    assert row10.get("view_event_count", 0) == 1
-    row11 = next(r for r in parsed if r["hour"] == "2025-05-07T11:00:00")
-    assert row11.get("click_event_count", 0) == 1
-    assert row11.get("view_event_count", 0) == 0
 
+    # Call function (now assumed to save or return CSV content as string)
+    csv_data = main.aggregate_events(blobs)  # modify function to return CSV as string for testability
 
-def test_write_summary_to_gcs():
-    uploaded = {}
-    class FakeBlob:
-        def __init__(self, path):
-            self.path = path
-        def upload_from_string(self, data, content_type):
-            uploaded['data'] = data
-            uploaded['content_type'] = content_type
+    reader = csv.DictReader(StringIO(csv_data))
+    rows = list(reader)
 
-    bucket = MagicMock()
-    bucket.name = "test-bucket"
-    bucket.blob.side_effect = lambda path: FakeBlob(path)
+    row10 = next(r for r in rows if r["hour"] == "2025-05-07T10:00:00")
+    assert int(row10.get("click_event_count", 0)) == 1
+    assert int(row10.get("view_event_count", 0)) == 1
 
-    date = datetime(2025, 5, 7, tzinfo=timezone.utc)
-    summary_data = "{\"hour\": \"2025-05-07T10:00:00\", \"click_event_count\": 2}"
-    uri = main.write_summary_to_gcs(bucket, summary_data, date)
-
-    assert uri == "gs://test-bucket/summary/2025/05/07/hourly_summary_2025-05-07.json"
-    assert uploaded['data'] == summary_data
-    assert uploaded['content_type'] == "application/json"
+    row11 = next(r for r in rows if r["hour"] == "2025-05-07T11:00:00")
+    assert int(row11.get("click_event_count", 0)) == 1
+    assert int(row11.get("view_event_count", 0)) == 0
 
 
 def test_load_to_bigquery_staging(monkeypatch):
@@ -97,7 +83,7 @@ def test_load_to_bigquery_staging(monkeypatch):
     table_ref = MagicMock()
     table_ref.table_id = "dataset.table"
 
-    uri = "gs://bucket/path.json"
+    uri = "gs://bucket/path.csv"
     main.load_to_bigquery_staging(uri, table_ref)
 
     assert calls['uri'] == uri

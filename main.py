@@ -1,4 +1,6 @@
 import os
+import io
+import csv
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -16,8 +18,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/royaldsouza/Downloads/my_gcp_project.json") # for local dev
-# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = SERVICE_ACCOUNT_FILE # for local dev
+SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/royaldsouza/Downloads/my_gcp_project.json") # for local dev
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = SERVICE_ACCOUNT_FILE # for local dev
 
 # Environment variables
 SOURCE_BUCKET_NAME = os.environ.get('SOURCE_BUCKET', 'event-data-raw')
@@ -25,7 +27,7 @@ SUMMARY_BUCKET_NAME = os.environ.get('SUMMARY_BUCKET', 'event-data-summary')
 BIGQUERY_DATASET = os.environ.get('BIGQUERY_DATASET','platform_event_data')
 BIGQUERY_TABLE = os.environ.get('BIGQUERY_TABLE','event_hourly_summary')
 BIGQUERY_STG_TABLE = os.environ.get('BIGQUERY_STG_TABLE','event_hourly_summary_staging')
-HOURS_THRESHOLD = int(os.environ.get('HOURS_THRESHOLD', '24'))
+HOURS_THRESHOLD = int(os.environ.get('HOURS_THRESHOLD', '0'))
 
 # Setup client
 storage_client = storage.Client()
@@ -55,38 +57,60 @@ def aggregate_events(blobs):
     # First pass: count per hour and event type
     raw_summary = defaultdict(lambda: defaultdict(int))
     all_event_types = set()
-
+    processed_count = 0
+        
     for blob in blobs:
-        content = json.loads(blob.download_as_text())
-        event_time = datetime.fromisoformat(content['timestamp'])
-        hour = event_time.strftime('%Y-%m-%dT%H:00:00')
-        event_type = content['type']
+        try:
+            content = json.loads(blob.download_as_text())
+            event_time = datetime.fromisoformat(content['timestamp'])
+            hour = event_time.strftime('%Y-%m-%dT%H:00:00')
+            event_type = content['type']
+            raw_summary[hour][event_type] += 1
+            all_event_types.add(event_type)
+            processed_count += 1
+            
+            # Log progress for large datasets
+            if processed_count % 1000 == 0:
+                logger.info(f"Processed {processed_count} events so far")
+                
+        except Exception as e:
+            logger.error(f"Error processing blob {blob.name}: {str(e)}")
+            continue
 
-        raw_summary[hour][event_type] += 1
-        all_event_types.add(event_type)
+    logger.info(f"Successfully processed {processed_count} events")
+    logger.info(f"Found {len(all_event_types)} unique event types: {all_event_types}")
 
     # Second pass: build consistent rows with all event types
-    lines = []
+    # Prepare CSV output
+    sorted_event_types = sorted(all_event_types)
+    header = ['hour'] + [f"{event_type}_event_count" for event_type in sorted_event_types]
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=header)
+    writer.writeheader()
+
     for hour, counts in sorted(raw_summary.items()):
         row = {"hour": hour}
-        for event_type in all_event_types:
-            key = f"{event_type}_event_count"
-            row[key] = counts.get(event_type, 0)
-        lines.append(json.dumps(row))
+        for event_type in sorted_event_types:
+            row[f"{event_type}_event_count"] = counts.get(event_type, 0)
+        writer.writerow(row)
 
-    logger.info(f"There are {len(lines)} rows in the summary")
-    return "\n".join(lines)
+    csv_content = output.getvalue()
+    output.close()
+
+    logger.info(f"There are {len(raw_summary)} rows in the summary")
+    return csv_content
 
 def write_summary_to_gcs(bucket, summary_data, date):
     """Save hourly data to CSV files in the specified bucket."""
 
     date_path = date.strftime("summary/%Y/%m/%d/")
-    filename = f"hourly_summary_{date.strftime('%Y-%m-%d')}.json"
+    filename = f"hourly_summary_{date.strftime('%Y-%m-%d')}.csv"
     blob_path = f"{date_path}{filename}"
 
     blob = bucket.blob(blob_path)
 
-    blob.upload_from_string(summary_data, content_type="application/json")
+    blob.upload_from_string(summary_data, content_type="text/csv")
 
     gcs_uri = f"gs://{bucket.name}/{blob_path}"
 
@@ -97,8 +121,9 @@ def load_to_bigquery_staging(gcs_uri, table_ref):
     """Load hourly data to BigQuery Staging table"""
 
     job_config = bigquery.LoadJobConfig(
-        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        source_format=bigquery.SourceFormat.CSV,
+        skip_leading_rows=1,
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
     )
 
     load_job = bigquery_client.load_table_from_uri(
